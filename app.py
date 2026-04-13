@@ -5,37 +5,49 @@ from datetime import datetime
 # 1. 網頁配置
 st.set_page_config(page_title="AI 實時生活管家", page_icon="🤖")
 
-# 自定義 CSS 讓介面更美觀（懶人也要看漂亮的介面）
+# 自定義 CSS
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
     .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     </style>
-    """, unsafe_allow_ Harris=True)
+    """, unsafe_allow_html=True)
 
 st.title("🤖 AI + IoT 實時生活管家")
 st.caption("專為高三學生設計：把生活調成「懶人友好」模式")
 
-# 2. 地區選擇（加入澳門與內地熱門城市）
-# 左側選單分類
-region = st.sidebar.selectbox("🌍 選擇區域", ["澳門", "大灣區/廣東", "主要城市"])
+# 2. 地區選擇（支援澳門與內地城市）
+region = st.sidebar.selectbox("🌍 選擇區域", ["澳門", "廣東地區", "其他城市"])
 
 if region == "澳門":
     city_map = {"澳門": "Macau"}
-elif region == "大灣區/廣東":
-    city_map = {"珠海": "Zhuhai", "廣州": "Guangzhou", "深圳": "Shenzhen", "中山": "Zhongshan", "東莞": "Dongguan"}
+elif region == "廣東地區":
+    city_map = {
+        "珠海": "Zhuhai", 
+        "廣州": "Guangzhou", 
+        "深圳": "Shenzhen", 
+        "中山": "Zhongshan", 
+        "東莞": "Dongguan",
+        "江門": "Jiangmen"
+    }
 else:
-    city_map = {"北京": "Beijing", "上海": "Shanghai", "成都": "Chengdu", "杭州": "Hangzhou"}
+    city_map = {
+        "北京": "Beijing", 
+        "上海": "Shanghai", 
+        "成都": "Chengdu", 
+        "杭州": "Hangzhou",
+        "武漢": "Wuhan"
+    }
 
 selected_city_name = st.sidebar.selectbox("📍 選擇城市", list(city_map.keys()))
 english_city = city_map[selected_city_name]
 
-# 3. 獲取實時 IoT 數據 (帶有防錯機制)
-@st.cache_data(ttl=300) # 每 5 分鐘快取一次
+# 3. 獲取實時數據
+@st.cache_data(ttl=300)
 def get_weather(city):
     try:
-        # 使用 wttr.in 的 JSON 介面
-        resp = requests.get(f"https://wttr.in/{city}?format=j1", timeout=5)
+        # 使用 wttr.in 獲取數據
+        resp = requests.get(f"https://wttr.in/{city}?format=j1", timeout=10)
         if resp.status_code == 200:
             return resp.json()
     except:
@@ -45,14 +57,12 @@ def get_weather(city):
 data = get_weather(english_city)
 
 if data:
-    # 提取數據
     current = data['current_condition'][0]
     temp = current['temp_C']
     feels_like = current['FeelsLikeC']
     humidity = current['humidity']
     uv = current['uvIndex']
-    # 隨機處理天氣描述（如果是英文就顯示英文，有中文顯示中文）
-    desc = current.get('lang_zh', [{}])[0].get('value', current['weatherDesc'][0]['value'])
+    desc = current['weatherDesc'][0]['value']
 
     # 4. 數據儀表板
     st.subheader(f"📊 {selected_city_name} 實時環境監測")
@@ -64,42 +74,43 @@ if data:
 
     st.markdown("---")
 
-    # 5. AI 懶人決策邏輯
+    # 5. AI 懶人決策
     st.subheader("💡 AI 懶人指令")
     
-    # 這裡就是 AI 的「大腦」：根據 IoT 數據給出生活建議
     advice_list = []
-    
-    # 穿衣邏輯
     t = int(temp)
-    if t < 15: advice_list.append("🧥 **穿衣重點**：冷空氣來襲！穿上羽絨服或厚大衣，別讓感冒斷了你的複習節奏。")
-    elif t < 22: advice_list.append("🧥 **穿衣重點**：氣溫偏涼，建議「洋蔥式穿法」（內搭短袖+外加衛衣/外套）。")
-    else: advice_list.append("👕 **穿衣重點**：天氣炎熱，短袖即可，但記得帶件薄外套進空調房。")
-
-    # 針對澳門/南方濕度的邏輯
     h = int(humidity)
-    if h > 80: advice_list.append("💧 **環境警告**：濕度爆表！室內記得開除濕，否則書本會發霉，人也容易昏沉。")
-
-    # 紫外線邏輯
     u = int(uv)
-    if u > 5: advice_list.append("☀️ **戶外警告**：紫外線強烈，如果要出門買宵夜/補習，記得走有遮陽的地方。")
 
-    # 下雨邏輯
-    if "rain" in desc.lower() or "雨" in desc:
-        advice_list.append("☔ **裝備提醒**：偵測到降雨機率，**懶人必備**：直接放把傘在書包，省得跑回家拿。")
+    # 穿衣邏輯
+    if t < 15: 
+        advice_list.append("🧥 **穿衣建議**：冷空氣發威，羽絨或厚大衣準備好，別凍著了影響複習。")
+    elif t < 23: 
+        advice_list.append("🧥 **穿衣建議**：氣溫適中但微涼，建議穿衛衣或薄外套，方便穿脫。")
+    else: 
+        advice_list.append("👕 **穿衣建議**：外面挺熱的，短袖上陣，但進空調房記得披件校服。")
+
+    # 濕度邏輯（針對澳門/南方）
+    if h > 80: 
+        advice_list.append("💧 **環境警報**：濕度太高了！家裡記得開除濕，不然人會昏昏欲睡，效率極低。")
+    
+    # 紫外線與降雨
+    if u > 6: 
+        advice_list.append("☀️ **紫外線強**：出門補習記得走騎樓，防曬做得好，心情不會燥。")
+    
+    if "rain" in desc.lower() or "shower" in desc.lower():
+        advice_list.append("☔ **裝備提醒**：雲端偵測到降雨可能，出門一定要帶傘！")
     else:
-        advice_list.append("✅ **裝備提醒**：目前無雨，可以空手出門，身心輕鬆。")
+        advice_list.append("✅ **裝備提醒**：目前天氣穩定，可以輕鬆出門。")
 
-    # 顯示建議
     for advice in advice_list:
         st.info(advice)
 
 else:
-    st.error("⚠️ 數據抓取失敗。可能是網路問題，或者 API 暫時繁忙。請點擊下方的刷新按鈕。")
+    st.error("⚠️ 無法連線到氣象數據伺服器，請稍後刷新重試。")
 
-if st.button("🔄 刷新實時數據"):
+if st.button("🔄 刷新數據"):
     st.rerun()
 
-# 頁尾
 st.markdown("---")
-st.caption(f"最後更新：{datetime.now().strftime('%H:%M:%S')} | 本系統自動整合 IoT 氣候數據與 AI 決策模型")
+st.caption(f"數據更新時間：{datetime.now().strftime('%H:%M:%S')} | 基於 IoT 雲端數據採集")
