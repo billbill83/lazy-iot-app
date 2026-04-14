@@ -16,7 +16,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.title("🤖 AI + IoT 懶人生活管家")
-st.markdown("#### 「讓技術處理繁瑣，讓你專注於高三衝刺」")
+st.markdown("#### 「出門前的準備都由我來！」")
 st.divider()
 
 # 2. 地區選擇邏輯 (支持澳門、廣東及內地城市)
