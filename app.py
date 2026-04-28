@@ -1,13 +1,12 @@
 import streamlit as st
 import requests
-import random  # 導入隨機庫
+import random
 from datetime import datetime
 from duckduckgo_search import DDGS
 
-# 網頁基礎配置
-st.set_page_config(page_title="AI 懶人生活管家", page_icon="🤖", layout="centered")
+# --- 1. 網頁基礎配置 ---
+st.set_page_config(page_title="AI 智慧生活管家", page_icon="🤖", layout="centered")
 
-# CSS 樣式優化
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -22,18 +21,25 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🤖 智慧生活決策助手")
+st.title("🤖 智慧生活決策助手 (動態增強版)")
 st.divider()
 
-# 地區座標
+# --- 2. 擴充地區座標庫 ---
 city_coords = {
-    "澳門": {"lat": 22.19, "lon": 113.54},
-    "珠海": {"lat": 22.27, "lon": 113.57},
-    "香港": {"lat": 22.31, "lon": 114.17}
+    "澳門 - 北區": {"lat": 22.21, "lon": 113.55},
+    "澳門 - 中區": {"lat": 22.19, "lon": 113.54},
+    "澳門 - 氹仔島": {"lat": 22.15, "lon": 113.56},
+    "澳門 - 路環島": {"lat": 22.12, "lon": 113.56},
+    "珠海 - 拱北/香洲": {"lat": 22.27, "lon": 113.57},
+    "珠海 - 橫琴": {"lat": 22.14, "lon": 113.54},
+    "香港 - 中環": {"lat": 22.28, "lon": 114.15},
+    "香港 - 九龍": {"lat": 22.31, "lon": 114.17},
+    "廣州": {"lat": 23.13, "lon": 113.26},
+    "深圳": {"lat": 22.54, "lon": 114.05}
 }
-selected_city = st.sidebar.selectbox("📍 選擇城市", list(city_coords.keys()))
+selected_city = st.sidebar.selectbox("📍 選擇詳細位置", list(city_coords.keys()))
 
-# 獲取天氣
+# --- 3. 數據獲取 ---
 @st.cache_data(ttl=600)
 def fetch_weather(city_name):
     c = city_coords[city_name]
@@ -41,40 +47,36 @@ def fetch_weather(city_name):
     res = requests.get(url).json()
     return res['current_weather'], res['hourly']['relative_humidity_2m'][0], res['hourly']['precipitation_probability'][0]
 
-# --- 核心改動：增加隨機風格的 AI 引擎 ---
-def get_smart_advice(temp, hum, rain, city):
-    # 1. 定義多樣化的說話風格
-    styles = [
-        "幽默風趣且愛開玩笑", 
-        "像溫柔慈祥的長輩", 
-        "像極簡主義的專業教練", 
-        "像充滿活力的旅遊導遊", 
-        "像愛碎碎唸但貼心的好朋友",
-        "用充滿科技感和未來感的口吻"
+# --- 4. 隨機問題與隨機風格引擎 ---
+def get_dynamic_ai_advice(temp, hum, rain, city):
+    # 每次點擊隨機選一個「說話語氣」
+    styles = ["幽默搞怪", "專業嚴謹", "溫柔貼心", "極簡冷酷", "像個老派紳士"]
+    
+    # 每次點擊隨機選一個「關注重點」讓問題本身發生變化
+    perspectives = [
+        "請特別從『戶外穿搭美學』的角度給建議。",
+        "請特別從『皮膚保養與防潮』的角度給建議。",
+        "請從『今天適不適合戶外運動』的角度出發。",
+        "請用『趕時間上學的學生』視角給出最直接的指令。",
+        "請加入一個關於今天天氣的『冷知識』並給出建議。"
     ]
-    # 每次點擊按鈕時，隨機選一個風格
-    current_style = random.choice(styles)
+    
+    selected_style = random.choice(styles)
+    selected_perspective = random.choice(perspectives)
 
-    # 2. 準備保底建議（當 AI 繁忙時）
-    wear = "穿短袖" if temp > 28 else ("短袖加件薄外套" if temp >= 18 else "穿厚外套")
-    umbrella = "記得帶傘！" if rain > 30 else "無需帶傘。"
-    backup_advice = f"🧥 建議：{wear}。 \n☔ 雨具：{umbrella} \n✨ 提醒：{city}當前濕度為{hum}%，體感舒適。"
-
-    # 3. 嘗試調用 AI，並在 Prompt 中要求多樣性
     try:
         with DDGS() as ddgs:
-            # 加入隨機風格和「每次都要不同」的要求
-            prompt = (f"你是住在{city}的生活管家。現在氣溫{temp}度，濕度{hum}%，降雨機率{rain}%。"
-                      f"請以「{current_style}」的風格給出50字以內的建議。"
-                      f"注意：請確保你的建議內容與遣詞用句具有新鮮感，不要與之前的回覆雷同。")
+            # 這裡的問題（Prompt）每次點擊都會因為上面的隨機選擇而完全不同
+            prompt = (f"你是住在{city}的生活管家。氣溫{temp}度，濕度{hum}%，降雨率{rain}%。 "
+                      f"請用「{selected_style}」的語氣給出50字以內建議。 "
+                      f"重點：{selected_perspective}")
             
             response = ddgs.chat(prompt, model='gpt-4o-mini')
-            if response: return response
+            return response if response else "AI 暫時休息，請參考：建議穿輕便服飾。"
     except:
-        return backup_advice
-    return backup_advice
+        return f"🧥 建議：溫度{temp}度，穿輕便外衣。☔ 降雨{rain}%，視情況帶傘。"
 
-# 介面渲染
+# --- 5. 介面呈現 ---
 weather, hum, rain = fetch_weather(selected_city)
 if weather:
     st.subheader(f"📊 {selected_city} 實時環境")
@@ -85,12 +87,11 @@ if weather:
     
     st.divider()
     
-    st.subheader("💡 AI 懶人決策指令")
-    if st.button("獲取今日決策"):
-        with st.spinner("AI 正在為你構思新鮮建議..."):
-            advice = get_smart_advice(weather['temperature'], hum, rain, selected_city)
+    st.subheader("💡 每按一次都有新驚喜")
+    if st.button("獲取動態決策"):
+        with st.spinner("AI 正在切換思維模式..."):
+            advice = get_dynamic_ai_advice(weather['temperature'], hum, rain, selected_city)
             st.markdown(f'<div class="ai-card">{advice}</div>', unsafe_allow_html=True)
-            # 添加一個小的提示效果
-            st.toast(f"切換至「{random.choice(['驚喜','獨特','全新'])}」視角生成建議")
+            st.toast("AI 已切換視角！")
 
-st.caption(f"數據更新時間：{datetime.now().strftime('%H:%M:%S')}")
+st.caption(f"最後更新：{datetime.now().strftime('%H:%M:%S')}")
