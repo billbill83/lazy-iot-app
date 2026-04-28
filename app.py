@@ -1,97 +1,267 @@
 import streamlit as st
+
 import requests
-import openai  # 記得在 requirements.txt 加入 openai
 
-# --- 頁面配置 ---
-st.set_page_config(page_title="AI 懶人生活管家", page_icon="🤖", layout="wide")
+from datetime import datetime
 
-# --- 自定義樣式 (美化 UI) ---
+
+
+# 1. 網頁基礎配置
+
+st.set_page_config(page_title="AI 懶人生活管家", page_icon="🤖", layout="centered")
+
+
+
+# 自定義 CSS (提升視覺高級感)
+
 st.markdown("""
+
     <style>
+
     .main { background-color: #f0f2f6; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .advice-box { background-color: #e1f5fe; padding: 20px; border-radius: 15px; border-left: 5px solid #0288d1; }
+
+    .stMetric { background-color: #ffffff; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+
+    div.stButton > button:first-child { background-color: #007bff; color: white; border-radius: 10px; width: 100%; }
+
+    .reportview-container .main .block-container { padding-top: 2rem; }
+
     </style>
+
     """, unsafe_allow_html=True)
 
-# --- 1. 數據獲取模組 ---
-def get_weather_data(city):
+
+
+st.title("🤖 AI + IoT 懶人生活管家")
+
+st.markdown("#### 「出門前的準備都由我來！」")
+
+st.divider()
+
+
+
+# 2. 地區選擇邏輯 (支持澳門、廣東及內地城市)
+
+st.sidebar.header("📍 位置設置")
+
+region = st.sidebar.selectbox("選擇區域", ["澳門", "廣東地區", "其他主要城市"])
+
+
+
+if region == "澳門":
+
+    city_map = {"澳門": "Macau"}
+
+elif region == "廣東地區":
+
+    city_map = {
+
+        "珠海": "Zhuhai", "廣州": "Guangzhou", "深圳": "Shenzhen", 
+
+        "中山": "Zhongshan", "東莞": "Dongguan", "佛山": "Foshan"
+
+    }
+
+else:
+
+    city_map = {
+
+        "北京": "Beijing", "上海": "Shanghai", "成都": "Chengdu", 
+
+        "杭州": "Hangzhou", "南京": "Nanjing", "武漢": "Wuhan"
+
+    }
+
+
+
+selected_city_name = st.sidebar.selectbox("選擇城市", list(city_map.keys()))
+
+english_city = city_map[selected_city_name]
+
+
+
+# 3. 實時數據獲取 (模擬 IoT 雲端數據採集)
+
+@st.cache_data(ttl=300)
+
+def fetch_weather_data(city):
+
     try:
-        # 使用 wttr.in 獲取數據
+
+        # 使用 wttr.in JSON API
+
         url = f"https://wttr.in/{city}?format=j1"
-        response = requests.get(url, timeout=5)
-        data = response.json()
-        
-        current = data['current_condition'][0]
-        temp = int(current['temp_C'])
-        feels_like = int(current['FeelsLikeC'])
-        humidity = int(current['humidity'])
-        uv_index = int(current['uvIndex'])
-        desc = current['lang_zh'][0]['value'] if 'lang_zh' in current else current['weatherDesc'][0]['value']
-        
-        # 判斷是否會下雨 (取未來 3 小時的降雨機率)
-        rain_chance = int(data['weather'][0]['hourly'][0]['chanceofrain'])
-        
-        return temp, feels_like, humidity, uv_index, desc, rain_chance
-    except:
+
+        response = requests.get(url, timeout=10)
+
+        if response.status_code == 200:
+
+            return response.json()
+
+    except Exception as e:
+
         return None
 
-# --- 2. AI 決策引擎 (核心升級) ---
-def get_ai_advice(temp, humidity, uv, rain, desc):
-    """
-    這裡模擬調用 AI。如果你有 OpenAI Key，可以解除註釋。
-    如果沒有，我們用一個『模擬 AI 邏輯』來生成像 AI 一樣親切的建議。
-    """
-    # 這裡就是所謂的 Prompt Engineering (提示詞工程)
-    prompt = f"天氣{desc}，氣溫{temp}度，濕度{humidity}%，降雨機率{rain}%，紫外線{uv}。"
-    
-    # --- 模擬 AI 生成的語氣 (如果暫時沒接 API，這段也很專業) ---
-    advice = f"### 🤖 AI 管家今日提醒：\n"
-    
-    # 穿衣建議
-    if temp < 15: advice += f"🧥 **穿衣方面**：今天感覺挺冷的，建議穿上厚大衣或羽絨服，裡面加件保暖內衣。\n"
-    elif 15 <= temp < 22: advice += f"薄外套 **穿衣方面**：天氣微涼，穿件長袖襯衫配件薄外套最合適，方便穿脫。\n"
-    else: advice += f"👕 **穿衣方面**：天氣暖和/炎熱，穿透氣的短袖即可，但室內冷氣可能較強，帶件薄校服防感冒。\n"
-    
-    # 雨具建議
-    if rain > 40: advice += f"☔ **雨具提醒**：降雨機率有{rain}%，**一定要帶雨傘**！別心存僥倖，免得淋成落湯雞。\n"
-    elif 10 < rain <= 40: advice += f"🌂 **雨具提醒**：天空雲層較厚，建議放把摺疊傘在書包備用，以防萬一。\n"
-    else: advice += f"☀️ **雨具提醒**：降雨機率很低，基本不需要帶傘，可以輕便出門。\n"
-    
-    # 環境提醒
-    if humidity > 80: advice += f"💧 **環境注意**：澳門今天濕氣很重，洗好的衣服可能很難乾，出門記得關好門窗，回家記得開除濕機。\n"
-    if uv > 6: advice += f"🕶️ **防曬提醒**：紫外線指數偏高，戶外活動超過15分鐘記得塗防曬或戴帽子。\n"
-    
-    return advice
+    return None
 
-# --- 3. 網頁介面展示 ---
-st.title("🛡️ 智慧生活：AI 懶人天氣決策系統")
-st.write("針對澳門學生開發，解決「穿衣糾結」與「要不要帶傘」的終極方案。")
 
-city = st.sidebar.selectbox("選擇你的城市", ["Macau", "Zhuhai", "Hong Kong", "Guangzhou", "Shenzhen"])
 
-if st.sidebar.button("獲取今日 AI 決策"):
-    with st.spinner("AI 正在分析雲端氣象數據..."):
-        weather = get_weather_data(city)
-        
-        if weather:
-            temp, feels, hum, uv, desc, rain = weather
-            
-            # 展示數據卡片
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("實際氣溫", f"{temp}°C")
-            col2.metric("體感溫度", f"{feels}°C")
-            col3.metric("空氣濕度", f"{hum}%")
-            col4.metric("降雨機率", f"{rain}%")
-            
-            st.write(f"**當前天氣狀態：** {desc}")
-            st.divider()
-            
-            # 展示 AI 建議
-            full_advice = get_ai_advice(temp, hum, uv, rain, desc)
-            st.markdown(f'<div class="advice-box">{full_advice}</div>', unsafe_allow_html=True)
-            
-        else:
-            st.error("數據獲取失敗，請檢查網路連線。")
+data = fetch_weather_data(english_city)
 
-st.sidebar.info("本系統由高三畢業專題研究項目支持，旨在實現『認知卸載』。")
+
+
+if data:
+
+    # 提取數據
+
+    current = data['current_condition'][0]
+
+    temp = int(current['temp_C'])
+
+    feels_like = int(current['FeelsLikeC'])
+
+    humidity = int(current['humidity'])
+
+    uv = int(current['uvIndex'])
+
+    desc = current['weatherDesc'][0]['value'].lower()
+
+
+
+    # 4. 數據儀表板呈現
+
+    st.subheader(f"📊 {selected_city_name} 實時環境參數")
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    c1.metric("氣溫", f"{temp}°C")
+
+    c2.metric("體感", f"{feels_like}°C")
+
+    c3.metric("濕度", f"{humidity}%")
+
+    c4.metric("紫外線", uv)
+
+
+
+    st.divider()
+
+
+
+    # 5. 核心 AI 決策引擎 (廣泛且多樣的穿衣與生活建議)
+
+    st.subheader("💡 AI 懶人決策指令")
+
+    
+
+    advices = []
+
+
+
+    # A. 基礎穿衣架構
+
+    if feels_like >= 32:
+
+        wear = "🔥 **極熱提醒**：穿著最輕便的背心或吸濕排汗短袖，儘量減少皮膚覆蓋面積。"
+
+    elif 26 <= feels_like < 32:
+
+        wear = "👕 **夏季標準**：棉質短袖 T-Shirt 搭配短褲。建議選擇淺色系以減少熱吸收。"
+
+    elif 20 <= feels_like < 26:
+
+        wear = "👔 **舒適穿搭**：短袖外加一件薄款襯衫或抗 UV 防曬長袖，適應微涼。"
+
+    elif 15 <= feels_like < 20:
+
+        wear = "🧥 **春秋疊穿**：長袖衛衣 (Hoodie) 或薄針織衫，早晚建議加一件輕便夾克。"
+
+    elif 10 <= feels_like < 15:
+
+        wear = "🧣 **冬季防禦**：保暖內衣 (發熱衣) + 羊毛衫 + 防風外套。"
+
+    else:
+
+        wear = "❄️ **嚴寒警告**：羽絨服 + 圍巾 + 手套。多層保暖勝過一件厚衣。"
+
+
+
+    advices.append(wear)
+
+
+
+    # B. 針對特定場景的擴展建議
+
+    # 溫差提醒
+
+    if abs(temp - feels_like) > 5:
+
+        advices.append("🌡️ **溫差注意**：氣溫與體感差異顯著，強烈建議採用『洋蔥式穿法』以便隨時增減。")
+
+    
+
+    # 補習班/室內空調提醒
+
+    if temp > 25:
+
+        advices.append("🏫 **空調房場景**：雖然室外熱，但室內冷氣可能較強。包裡請預備一件薄外套，避免溫差導致感冒影響學習。")
+
+
+
+    # 南方濕冷/濕熱提醒
+
+    if humidity > 80:
+
+        if temp < 18:
+
+            advices.append("💧 **濕冷預警**：當前濕度極高，寒氣具備『穿透屬性』，最外層必須防風。")
+
+        elif temp > 28:
+
+            advices.append("💦 **悶熱警告**：環境潮濕悶熱，建議穿著亞麻或速乾材質，防止出汗後衣服黏身影響專注力。")
+
+
+
+    # 紫外線與雨水提醒
+
+    if uv >= 6:
+
+        advices.append("🕶️ **防曬建議**：紫外線偏強，如需長距離步行，請使用遮陽傘或穿著物理防曬服。")
+
+    
+
+    if "rain" in desc or "shower" in desc:
+
+        advices.append("☔ **裝備指令**：監測到降雨可能，出門必須攜帶雨具，建議穿著防水性能較好的鞋子。")
+
+    else:
+
+        advices.append("✅ **裝備指令**：目前天氣穩定，可輕裝簡從，無需攜帶雨傘。")
+
+
+
+    # 渲染建議
+
+    for a in advices:
+
+        st.info(a)
+
+
+
+else:
+
+    st.error("❌ 獲取實時數據失敗。請檢查網絡或更換城市重試。")
+
+
+
+# 6. 底部刷新按鈕
+
+if st.button("🔄 刷新實時環境數據"):
+
+    st.rerun()
+
+
+
+st.divider()
+
+st.caption(f"系統運行中：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | 數據源: Open IoT Weather Node")
