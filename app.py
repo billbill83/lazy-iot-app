@@ -1,75 +1,102 @@
 import streamlit as st
 import requests
 from datetime import datetime
-from duckduckgo_search import DDGS  # 這是目前 Python 中最穩定的免 Key AI 接口
+from duckduckgo_search import DDGS
 
-# 1. 網頁基礎配置 (保持原本的高級感)
-st.set_page_config(page_title="Puter AI 智慧管家", page_icon="🌤️", layout="centered")
+# --- 1. 網頁基礎配置 ---
+st.set_page_config(page_title="AI 懶人生活管家", page_icon="🤖", layout="centered")
 
+# 自定義 CSS
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
     .stMetric { background-color: #ffffff; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-    .ai-card { background-color: #ffffff; padding: 25px; border-radius: 20px; border-top: 5px solid #00d2ff; box-shadow: 0 10px 20px rgba(0,0,0,0.05); }
+    .ai-card { 
+        background-color: #ffffff; 
+        padding: 25px; 
+        border-radius: 20px; 
+        border-left: 10px solid #00d2ff; 
+        box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+        color: #333;
+        line-height: 1.6;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🤖 Puter 邏輯：免 Key AI 生活管家")
-st.markdown("#### 「基於雲端原生技術，實現零配置智慧決策」")
+st.title("🤖 免 Key 智慧生活助手")
+st.markdown("#### 「無需驗證，讓 AI 決定你的出門穿搭」")
 st.divider()
 
-# 2. 地區選擇 (保持你原本的邏輯)
-st.sidebar.header("📍 定位與設置")
-city_map = {"澳門": "Macau", "珠海": "Zhuhai", "香港": "Hong Kong"}
-selected_city = st.sidebar.selectbox("選擇城市", list(city_map.keys()))
+# --- 2. 地區選擇與座標綁定 ---
+# 這裡解決了你圖片中的 KeyError 問題，確保選單和座標完全一致
+city_coords = {
+    "澳門": {"lat": 22.19, "lon": 113.54},
+    "珠海": {"lat": 22.27, "lon": 113.57},
+    "香港": {"lat": 22.31, "lon": 114.17},
+    "廣州": {"lat": 23.13, "lon": 113.26},
+    "深圳": {"lat": 22.54, "lon": 114.05}
+}
 
-# 3. 免 Key 數據獲取 (Open-Meteo)
-@st.cache_data(ttl=300)
-def get_weather(city):
-    # 這也是一個無需 Key 的專業氣象 API
-    coords = {"Macau": (22.19, 113.54), "Zhuhai": (22.27, 113.57), "Hong Kong": (22.31, 114.17)}
-    lat, lon = coords[city]
-    url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true&hourly=relative_humidity_2m"
-    res = requests.get(url).json()
-    return res['current_weather'], res['hourly']['relative_humidity_2m'][0]
+selected_city = st.sidebar.selectbox("📍 選擇你的城市", list(city_coords.keys()))
 
-# 4. 無需 Key 的 AI 決策引擎
-def get_puter_style_advice(temp, hum, desc_code):
-    # 將氣象代碼轉為文字
-    weather_desc = "晴朗" if desc_code == 0 else "多雲或有雨"
-    
-    prompt = f"現在溫度{temp}度，濕度{hum}%，天氣{weather_desc}。請給澳門學生一個簡短的穿衣、帶傘和生活建議，字數在80字以內，口吻要像好朋友。"
-    
+# --- 3. 數據獲取 (使用免 Key 的 Open-Meteo) ---
+@st.cache_data(ttl=600)
+def fetch_weather(city_name):
+    coords = city_coords[city_name]
+    url = f"https://api.open-meteo.com/v1/forecast?latitude={coords['lat']}&longitude={coords['lon']}&current_weather=true&hourly=relative_humidity_2m,precipitation_probability"
+    try:
+        res = requests.get(url, timeout=10).json()
+        current = res['current_weather']
+        # 取得當前小時的濕度與降雨機率
+        humidity = res['hourly']['relative_humidity_2m'][0]
+        rain_chance = res['hourly']['precipitation_probability'][0]
+        return current, humidity, rain_chance
+    except Exception as e:
+        st.error(f"數據獲取失敗: {e}")
+        return None, None, None
+
+# --- 4. 免 Key AI 建議邏輯 ---
+def get_ai_advice(temp, hum, rain, city):
+    # 建立一個清晰的指令給 AI
+    prompt = f"""
+    你是一個貼心的生活管家。現在{city}的環境數據如下：
+    氣溫：{temp}度，濕度：{hum}%，降雨機率：{rain}%。
+    請給出 100 字以內的建議，包含：
+    1. 穿衣建議（考慮體感）。
+    2. 要不要帶傘（根據降雨率）。
+    3. 溫馨提醒。
+    請用溫暖有禮貌的中文回覆。
+    """
     try:
         with DDGS() as ddgs:
-            # 這是核心：直接調用，無需任何 API Key
-            results = ddgs.chat(prompt, model='gpt-4o-mini')
-            return results
-    except:
-        return "⚠️ AI 暫時斷開連接，請檢查網路。"
+            # 調用免 Key 的 AI 接口
+            response = ddgs.chat(prompt, model='gpt-4o-mini')
+            return response
+    except Exception:
+        return "⚠️ AI 目前繁忙，請稍後再試。建議參考數值：體感略涼，建議帶備薄外套。"
 
-# 5. UI 展示
-weather, humidity = get_weather(selected_city)
-temp = weather['temperature']
+# --- 5. 畫面呈現 ---
+weather_data, hum_data, rain_data = fetch_weather(selected_city)
 
-st.subheader(f"📊 {selected_city} 當前數據")
-c1, c2, c3 = st.columns(3)
-c1.metric("即時氣溫", f"{temp}°C")
-c2.metric("環境濕度", f"{humidity}%")
-c3.metric("氣候代碼", weather['weathercode'])
+if weather_data:
+    temp = weather_data['temperature']
+    
+    # 儀表板
+    st.subheader(f"📊 {selected_city} 實時數據")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("氣溫", f"{temp}°C")
+    col2.metric("濕度", f"{hum_data}%")
+    col3.metric("降雨機率", f"{rain_data}%")
+    
+    st.divider()
+    
+    # AI 建議按鈕
+    st.subheader("💡 AI 懶人決策建議")
+    if st.button("獲取 AI 出門指令"):
+        with st.spinner("AI 正在分析雲端數據..."):
+            advice = get_ai_advice(temp, hum_data, rain_data, selected_city)
+            st.markdown(f'<div class="ai-card">{advice}</div>', unsafe_allow_html=True)
 
+# 頁尾
 st.divider()
-
-# AI 建議區塊
-st.subheader("💡 Puter AI 指令")
-if st.button("生成懶人決策"):
-    with st.spinner("正在呼叫雲端 AI 引擎..."):
-        advice = get_puter_style_advice(temp, humidity, weather['weathercode'])
-        st.markdown(f"""
-        <div class="ai-card">
-            <p style="color: #555; line-height: 1.6; font-size: 1.1rem;">{advice}</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-st.divider()
-st.caption(f"系統運行中 | 技術支持：Puter-Style API | 更新時間：{datetime.now().strftime('%H:%M:%S')}")
+st.caption(f"系統運行中 | 更新時間：{datetime.now().strftime('%H:%M:%S')} | Data by Open-Meteo")
