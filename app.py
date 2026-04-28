@@ -4,124 +4,127 @@ import random
 from datetime import datetime
 from duckduckgo_search import DDGS
 
-# --- 1. 網頁基礎配置 (更適合手機瀏覽) ---
-st.set_page_config(page_title="AI 澳門生活管家", page_icon="🇲🇴", layout="centered")
+# --- 1. 網頁基礎配置 (恢復原始 UI 風格) ---
+st.set_page_config(page_title="AI 智慧生活管家", page_icon="🤖", layout="centered")
 
 st.markdown("""
     <style>
-    .main { background-color: #f5f7f9; }
+    .main { background-color: #f8f9fa; }
     .ai-card { 
         background-color: #ffffff; 
-        padding: 20px; 
-        border-radius: 15px; 
-        border-top: 5px solid #00a8ff;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        color: #333;
-        font-size: 1rem;
-    }
-    .stButton>button {
-        width: 100%;
-        border-radius: 10px;
-        height: 3em;
-        background-color: #00a8ff;
-        color: white;
+        padding: 25px; 
+        border-radius: 20px; 
+        border-left: 10px solid #00d2ff; 
+        box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+        font-size: 1.1rem;
+        line-height: 1.6;
     }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🇲🇴 AI 智慧生活管家 (澳門精細版)")
+st.title("🤖 智慧生活決策助手 (精確增強版)")
+st.divider()
 
-# --- 2. 精細化地區座標庫 ---
-# 加入了你提到的青洲、黑沙環、黑沙等
+# --- 2. 擴充地區庫 (澳門精細點 + 中國主要城市) ---
 city_coords = {
-    "澳門 - 青洲 (Ilha Verde)": {"lat": 22.2105, "lon": 113.5375},
-    "澳門 - 黑沙環 (Areia Preta)": {"lat": 22.2070, "lon": 113.5530},
-    "澳門 - 中區/新馬路": {"lat": 22.1930, "lon": 113.5410},
-    "澳門 - 氹仔舊城區": {"lat": 22.1530, "lon": 113.5570},
-    "澳門 - 路環黑沙 (Hac Sa)": {"lat": 22.1260, "lon": 113.5660},
-    "珠海 - 拱北口岸": {"lat": 22.2210, "lon": 113.5500}
+    # 澳門精細區域
+    "澳門 - 青洲": {"lat": 22.21, "lon": 113.53},
+    "澳門 - 黑沙環": {"lat": 22.20, "lon": 113.55},
+    "澳門 - 氹仔島": {"lat": 22.15, "lon": 113.56},
+    "澳門 - 黑沙海灘": {"lat": 22.12, "lon": 113.56},
+    "澳門 - 中區": {"lat": 22.19, "lon": 113.54},
+    # 中國主要省份/城市
+    "北京": {"lat": 39.90, "lon": 116.40},
+    "上海": {"lat": 31.23, "lon": 121.47},
+    "廣州": {"lat": 23.13, "lon": 113.26},
+    "深圳": {"lat": 22.54, "lon": 114.05},
+    "珠海 - 拱北": {"lat": 22.27, "lon": 113.57},
+    "成都": {"lat": 30.65, "lon": 104.06},
+    "杭州": {"lat": 30.27, "lon": 120.15},
+    "西安": {"lat": 34.34, "lon": 108.93},
+    "武漢": {"lat": 30.59, "lon": 114.30},
+    "南京": {"lat": 32.06, "lon": 118.79},
+    "台北": {"lat": 25.03, "lon": 121.56},
+    "香港": {"lat": 22.31, "lon": 114.17}
 }
-selected_city = st.sidebar.selectbox("📍 選擇詳細觀測點", list(city_coords.keys()))
+selected_city = st.sidebar.selectbox("📍 選擇詳細位置", list(city_coords.keys()))
 
-# --- 3. 穩定版數據獲取函數 ---
-@st.cache_data(ttl=300) # 緩存5分鐘，避免頻繁請求
-def fetch_weather_safe(city_name):
+# --- 3. 強化版數據獲取 ---
+@st.cache_data(ttl=600)
+def fetch_weather_full(city_name):
+    c = city_coords[city_name]
+    # 請求更多實用數據：體感溫度, 濕度, 降雨機率, UV指數, 風速
+    url = f"https://api.open-meteo.com/v1/forecast?latitude={c['lat']}&longitude={c['lon']}&current_weather=true&hourly=relative_humidity_2m,precipitation_probability,apparent_temperature,uv_index,windspeed_10m&timezone=auto"
     try:
-        c = city_coords[city_name]
-        # 使用 Open-Meteo，增加 fallback 備用參數
-        url = f"https://api.open-meteo.com/v1/forecast?latitude={c['lat']}&longitude={c['lon']}&current_weather=true&hourly=relative_humidity_2m,precipitation_probability,uv_index&timezone=auto"
-        response = requests.get(url, timeout=5)
-        res = response.json()
-        
-        if 'current_weather' not in res:
-            return None
-            
+        res = requests.get(url).json()
         now_hour = datetime.now().hour
+        current = res['current_weather']
         return {
-            "temp": res['current_weather']['temperature'],
-            "wind": res['current_weather']['windspeed'],
+            "temp": current['temperature'],
+            "app_temp": res['hourly']['apparent_temperature'][now_hour],
             "hum": res['hourly']['relative_humidity_2m'][now_hour],
             "rain": res['hourly']['precipitation_probability'][now_hour],
-            "uv": res['hourly']['uv_index'][now_hour]
+            "uv": res['hourly']['uv_index'][now_hour],
+            "wind": res['hourly']['windspeed_10m'][now_hour]
         }
     except:
         return None
 
-# --- 4. 多樣化決策引擎 ---
-def get_smart_advice(data, city):
-    # 豐富風格庫
-    styles = ["專業管家", "毒舌室友", "幽默達人", "極簡主義者", "養生專家"]
-    # 豐富關注點
-    focus_points = [
-        "穿衣層次與外套建議 (是否需要防風)",
-        "防曬措施 (SPF、帽子、墨鏡)",
-        "雨具準備 (傘、防水鞋、室內避雨)",
-        "體感溫度與濕度應對 (髮型、皮膚保養)",
-        "戶外活動可行性 (適合散步還是留在家看劇)"
+# --- 4. 決策引擎 ---
+def get_ai_advice(data, city):
+    styles = ["幽默搞怪", "專業嚴謹", "溫柔貼心", "極簡冷酷", "像個老派紳士"]
+    perspectives = [
+        "穿搭與層次建議 (是否帶外套)",
+        "皮膚保養與防曬建議",
+        "雨具準備與出門安全性",
+        "運動與戶外活動可行性",
+        "體感溫度應對策略"
     ]
     
-    style = random.choice(styles)
-    focus = random.choice(focus_points)
+    selected_style = random.choice(styles)
+    selected_perspective = random.choice(perspectives)
 
     try:
         with DDGS() as ddgs:
-            # 構建強大的系統提示
-            prompt = (
-                f"你是{city}的AI助手，風格為「{style}」。"
-                f"當前氣候：溫度{data['temp']}°C, 濕度{data['hum']}%, 降雨{data['rain']}%, UV{data['uv']}。"
-                f"請針對以下重點給出50字內建議，必須包含『穿衣層次』、『是否帶外套』、『防曬』與『雨具』。"
-                f"重點：{focus}"
-            )
+            prompt = (f"你是住在{city}的生活管家。目前數據：溫度{data['temp']}°C(體感{data['app_temp']}°C)，"
+                      f"濕度{data['hum']}%，降雨率{data['rain']}%，UV指數{data['uv']}，風速{data['wind']}km/h。 "
+                      f"請以「{selected_style}」語氣給出具體建議。 "
+                      f"必須涵蓋：穿幾層衣物、是否帶外套、是否塗防曬、是否帶雨具。 "
+                      f"重點關注：{selected_perspective}")
+            
             response = ddgs.chat(prompt, model='gpt-4o-mini')
-            return response
+            return response if response else "AI 暫時休息，請參考：建議穿輕便服飾。"
     except:
-        # 當 AI 連線失敗時的本地硬核邏輯 (Hard-coded Logic)
-        advice = f"🧥 溫度 {data['temp']}°C，"
-        advice += "建議穿件防風外套。" if data['temp'] < 22 else "短袖即可，帶件薄衫防冷氣。"
-        advice += " ☀️ UV強烈，記得防曬。" if data['uv'] > 5 else ""
-        advice += " ☔ 降雨率高，出門請帶傘。" if data['rain'] > 30 else " ☁️ 天氣尚可，不需帶傘。"
-        return advice
+        return f"🧥 建議：體感{data['app_temp']}度。建議穿層次性衣物。☔ 降雨{data['rain']}%，視情況帶傘。☀️ UV為{data['uv']}，注意防曬。"
 
-# --- 5. UI 呈現邏輯 ---
-data = fetch_weather_safe(selected_city)
+# --- 5. 介面呈現 ---
+data = fetch_weather_full(selected_city)
 
 if data:
-    # 數據儀表盤
-    st.subheader(f"📊 {selected_city} 實時環境")
-    m1, m2, m3 = st.columns(3)
-    m1.metric("氣溫", f"{data['temp']}°C")
-    m2.metric("降雨", f"{data['rain']}%")
-    m3.metric("UV指數", f"{data['uv']}")
+    st.subheader(f"📊 {selected_city} 實時環境參數")
+    
+    # 第一排數據：溫度與體感
+    c1, c2, c3 = st.columns(3)
+    c1.metric("實際氣溫", f"{data['temp']}°C")
+    c2.metric("體感溫度", f"{data['app_temp']}°C")
+    c3.metric("空氣濕度", f"{data['hum']}%")
+    
+    # 第二排數據：防護相關
+    c4, c5, c6 = st.columns(3)
+    c4.metric("降雨機率", f"{data['rain']}%")
+    c5.metric("UV 指數", f"{data['uv']}")
+    c6.metric("當前風速", f"{data['wind']} km/h")
     
     st.divider()
     
-    # 決策按鈕
-    if st.button("🔄 獲取 AI 穿搭與出門建議"):
-        with st.spinner("🧠 AI 正在思考最適合澳門的穿搭..."):
-            advice = get_smart_advice(data, selected_city)
+    st.subheader("💡 AI 動態決策建議")
+    if st.button("獲取今日出門提案"):
+        with st.spinner("AI 正在分析大氣數據..."):
+            advice = get_ai_advice(data, selected_city)
             st.markdown(f'<div class="ai-card">{advice}</div>', unsafe_allow_html=True)
-            st.balloons()
+            # 移除了 balloons，改用 toast 提示
+            st.toast("建議已生成！", icon="✅")
 else:
-    st.error("⚠️ 暫時無法獲取該微小區域的氣象數據，請嘗試切換至相鄰區域。")
+    st.error("無法獲取氣象數據，請檢查網路連結。")
 
-st.caption(f"📍 精確座標數據 | 更新時間: {datetime.now().strftime('%H:%M:%S')}")
+st.caption(f"最後更新：{datetime.now().strftime('%H:%M:%S')} | 數據來源：Open-Meteo")
